@@ -1,0 +1,156 @@
+@media (min-width: 1200px) {
+    .container {
+        width: 82%;
+    }
+}
+
+.header {
+    display: flex;
+}
+
+.header .header-col {
+    padding: 15px 0;
+    margin: auto 0;
+}
+
+.header .header-col .quality {
+    margin-bottom: 0;
+}
+
+.header .header-col .quality span {
+    line-height: 20px;
+    font-size: 16px;
+}
+
+.body {
+    background-image: linear-gradient(to bottom right, #999, #427aa9a6);
+}
+
+.body #videos {
+    padding: 0;
+}
+
+.video-container {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.video-control {
+    display: none;
+    margin-bottom: 3px;
+    margin-right: 3px;
+    text-align: right;
+}
+
+.video-control li {
+    display: inline;
+}
+
+.video-control .microphone {
+    width: 20px;
+    cursor: pointer;
+}
+
+.video-control .switch {
+    margin-left: 5px;
+}
+
+.video-info {
+    width: 100%;
+    padding: 5px 0 0 0;
+    text-align: center;
+    list-style: none;
+    z-index: 999;
+    position: absolute;
+}
+
+.video-info-disable {
+    display: none;
+}
+
+.video-info li {
+    display: inline;
+}
+
+.video-tag {
+    display: flex;
+    border: 3px solid white;
+}
+
+.video-self {
+    border: 3px blue solid;
+}
+
+.video-tag video {
+    width: 100%;
+    height: 165px;
+    padding: 20px;
+    background-color: #333;
+}
+
+.nickname {
+    position: absolute;
+    z-index: 999;
+    margin-top: -30px;
+    width: 100%;
+    text-align: center;
+    color: #5bc0de;
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.chats {
+    background-color: #F5F5F5;
+}
+
+.chats .chats-txt {
+    height: 720px;
+    overflow-y: auto;
+    scrollbar-width: none; /* firefox */
+    -ms-overflow-style: none; /* IE 10+ */
+}
+
+.chats .chats-txt::-webkit-scrollbar {
+    display: none;
+}
+
+.chats .chats-txt .header {
+    display: flex;
+}
+
+.chats .chats-txt .header img {
+    width: 25px;
+    height: 25px;
+    margin: auto 0;
+}
+
+.chats .chats-txt .header span {
+    margin: auto 5px;
+    font-size: 14px;
+    line-height: 25px;
+    font-weight: 600;
+}
+
+.chats .chats-txt .message p {
+    margin: 5px 0 10px 0;
+}
+
+.chats .chats-txt .me {
+    direction: rtl;
+}
+
+.chats .chats-txt .system {
+    text-align: center;
+    font-weight: bold;
+    font-size: 16px;
+    color: #5cb85c;
+}
+
+.chats .chats-send textarea {
+    width: 100%;
+}
+
+.chats .chats-send button {
+    float: right;
+    margin-bottom: 10px;
+}
