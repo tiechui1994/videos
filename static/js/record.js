@@ -12,7 +12,8 @@ async function getDevices(kind) {
     const device = [];
     await navigator.mediaDevices.enumerateDevices().then(function (mediaDevices) {
         mediaDevices.forEach((v) => {
-            if (v.kind === kind) {
+            const label = v.label.toLocaleLowerCase();
+            if (v.kind === kind && !(label.includes('virtual') || label.includes('虚拟'))) {
                 log(v);
                 device.push(v);
             }
@@ -47,6 +48,7 @@ function captureUserMedia(kind, success_callback) {
 function captureDisplayMedia(kind, success_callback) {
     getDevices(kind).then((device) => {
         if (!device.length) {
+            alert('没有合适的输入设备, 请检查后再试....');
             return
         }
 
@@ -87,7 +89,7 @@ function captureDisplayMedia(kind, success_callback) {
                 success_callback(stream)
             })
         }).catch((err) => {
-            alert('Unable to capture your camera. Please check console logs.');
+            alert('无法获取到共享桌面, 请检查后再试....');
             console.error(err);
         });
     })
@@ -155,7 +157,7 @@ const vars = {
 
 function onstart() {
     const url = "wss://" + window.location.host + '/ws';
-    console.log(url);
+    log(url);
     vars.transport = new Transport(url);
 
     captureDisplayMedia(DeviceKind.AUDIOINPUT, (stream) => {
@@ -181,10 +183,11 @@ function onstart() {
         vars.recorder = new MediaStreamRecorder(stream, config);
         vars.recorder.record();
 
-        log('start...............');
+        log('start ..........');
         const task = setInterval(() => {
             if (queue.length === 0) {
                 if (vars.closed) {
+                    log('closed .......')
                     clearInterval(task)
                 }
                 return
@@ -229,40 +232,47 @@ function onstop() {
 }
 
 (() => {
-    vars.video.width = 640;
-    vars.video.height = 480;
+    vars.video.width = 1280;
+    vars.video.height = 640;
 
     const div = document.createElement('div');
 
-    const pause = document.createElement('button');
-    pause.innerHTML = '暂停';
-    pause.className = 'btn btn-success';
-    pause.data = 'resume'
-    pause.onclick = () => {
-        if (button.data === 'pause') {
-            onresume()
-            button.data = 'resume'
-        }
-        if (button.data === 'resume') {
-            onstop()
-            button.data = 'pause'
+    const controlBtn = document.createElement('button');
+    controlBtn.innerHTML = '暂停录制';
+    controlBtn.className = 'btn btn-success btn-lg button';
+    controlBtn.setAttribute('data', 'resume')
+
+    controlBtn.onclick = () => {
+        switch (controlBtn.getAttribute('data')) {
+            case 'resume':
+                log('onpause ......')
+                controlBtn.innerHTML = '恢复录制';
+                controlBtn.setAttribute('data', 'pause')
+                onpause()
+                break
+            case 'pause':
+                log('onresume ......')
+                controlBtn.innerHTML = '暂停录制';
+                controlBtn.setAttribute('data', 'resume')
+                onresume()
+                break
+
         }
     }
 
-    const stop = document.createElement('button');
-    stop.innerHTML = '结束';
-    stop.className = 'btn btn-success';
-    stop.onclick = () => {
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '结束';
+    closeBtn.className = 'btn btn-success btn-lg button';
+    closeBtn.onclick = () => {
         vars.transport.close()
         onstop()
     }
 
-    div.appendChild(pause)
-    div.appendChild(stop)
+    div.appendChild(controlBtn)
+    div.appendChild(closeBtn)
 
     const container = document.querySelector('#videos');
-    container.style = '';
-    container.innerHTML = ``;
+    container.innerHTML = '';
     container.appendChild(vars.video);
     container.appendChild(div)
 
