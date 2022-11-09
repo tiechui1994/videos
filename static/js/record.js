@@ -75,7 +75,6 @@ function captureDisplayMedia(kind, success_callback) {
                 const [audioTrack] = audioStream.getAudioTracks()
                 console.log(videoTrack, audioTrack)
                 const stream = new MediaStream([videoTrack, audioTrack])
-
                 videoTrack.onended = () => {
                     videoStream.stop()
                     audioStream.stop()
@@ -153,6 +152,7 @@ const vars = {
     video: document.createElement('video'),
     closed: false,
     stream: null,
+    Visualizer: null
 }
 
 function onstart() {
@@ -167,6 +167,8 @@ function onstart() {
         vars.video.muted = true;
 
         vars.stream = stream;
+
+        vars.Visualizer.start(stream)
 
         const queue = [];
         const config = {
@@ -193,7 +195,7 @@ function onstart() {
                 return
             }
 
-            const length = queue.length > 20 ? 20 : queue.length;
+            const length = queue.length > 30 ? 30 : queue.length;
             const blob = new Blob(queue.splice(0, length), {type: "video/webm; codecs=vp9"});
             blob.arrayBuffer().then((v) => {
                 vars.transport.send(new Uint8Array(v));
@@ -232,6 +234,9 @@ function onstop() {
 }
 
 (() => {
+    vars.Visualizer = new Visualizer()
+    vars.Visualizer.init()
+
     vars.video.width = 1280;
     vars.video.height = 640;
 
