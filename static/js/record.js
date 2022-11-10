@@ -160,7 +160,7 @@ function onstart() {
     log(url);
     vars.transport = new Transport(url);
 
-    captureDisplayMedia(DeviceKind.AUDIOINPUT, (stream) => {
+    captureDisplayMedia(DeviceKind.AUDIOOUTPUT, (stream) => {
         vars.video.srcObject = stream;
         vars.video.controls = true;
         vars.video.autoplay = true;

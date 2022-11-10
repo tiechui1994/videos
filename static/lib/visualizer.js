@@ -25,6 +25,11 @@ Visualizer.prototype = {
         window.cancelAnimationFrame = window.cancelAnimationFrame || window.webkitCancelAnimationFrame || window.mozCancelAnimationFrame || window.msCancelAnimationFrame;
         try {
             this.audioContext = new AudioContext();
+            this.audioContext.onstatechange = (ev) => {
+                console.log('[onstatechange]', ev)
+            }
+            console.log('state =====', this.audioContext.state)
+
         } catch (e) {
             this._updateInfo('!Your browser does not support AudioContext', false);
             console.log(e);
@@ -54,10 +59,14 @@ Visualizer.prototype = {
 
         let that = this;
 
-        analyser.fftSize = 1024
-        analyser.minDecibels = -125
-        analyser.maxDecibels = -10
-        analyser.smoothingTimeConstant = .3
+        audioContext.resume().then(() => {
+            console.log('state changed .... ', audioContext.state)
+        })
+
+        // analyser.fftSize = 512
+        // analyser.minDecibels = -100
+        // analyser.maxDecibels = 0
+        // analyser.smoothingTimeConstant = .3
         // connect the source to the analyser
         audioSourceNode.connect(analyser);
         // connect the analyser to the destination(the speaker), or we won't hear the sound
@@ -100,8 +109,6 @@ Visualizer.prototype = {
         gradient.addColorStop(0.5, '#ff0');
         gradient.addColorStop(0, '#f00');
 
-        const array = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteTimeDomainData(array)
         const drawMeter = () => {
             const array = new Uint8Array(analyser.frequencyBinCount);
             analyser.getByteFrequencyData(array);

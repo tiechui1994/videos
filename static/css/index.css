@@ -8,10 +8,13 @@
     background-image: linear-gradient(to bottom right, #999, #427aa9a6);
 }
 
-.body .videos {
+.body .item {
     padding: 0;
-    height: 720px;
     text-align: center;
+}
+
+.body .videos {
+    height: 600px;
 }
 
 .body .videos video {
