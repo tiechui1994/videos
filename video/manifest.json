@@ -1,0 +1,23 @@
+{
+  "name": "video",
+  "version": "0.1",
+  "manifest_version": 3,
+  "icons": {
+    "16": "icon_16.png"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "debugger",
+    "activeTab"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://*.google.com/*", "https://*.youtube.com/*"],
+      "js": ["content-script.js"]
+    }
+  ]
+}
