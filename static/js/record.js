@@ -64,10 +64,12 @@ function captureDisplayMedia(kind, success_callback) {
             const [videoTrack] = videoStream.getVideoTracks()
             const audioConstraints = {
                 audio: {
-                    groupId: device[0].groupId,
+                    // groupId: device[0].groupId,
+                    deviceId: device[1].deviceId,
                     autoGainControl: true, // 自动增益
                     echoCancellation: true, // 回声消除
                     noiseSuppression: true, // 噪音抑制
+                    chromeMediaSource: 'screen'
                 },
             };
             console.log('audio', audioConstraints)
@@ -156,7 +158,7 @@ const vars = {
 }
 
 function onstart() {
-    const url = "wss://" + window.location.host + '/ws';
+    const url = "wss://" + window.location.host + '/api/ws';
     log(url);
     vars.transport = new Transport(url);
 
@@ -237,8 +239,8 @@ function onstop() {
     vars.Visualizer = new Visualizer()
     vars.Visualizer.init()
 
-    vars.video.width = 1280;
-    vars.video.height = 640;
+    vars.video.width = 1080;
+    vars.video.height = 480;
 
     const div = document.createElement('div');
 

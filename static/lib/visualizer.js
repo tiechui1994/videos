@@ -45,7 +45,6 @@ Visualizer.prototype = {
     _visualize: function (audioContext, stream) {
         let audioSourceNode;
         const analyser = audioContext.createAnalyser();
-        console.log('==============>', stream.constructor.name)
         switch (stream.constructor.name) {
             case "MediaStream":
                 audioSourceNode = audioContext.createMediaStreamSource(stream)
@@ -69,10 +68,6 @@ Visualizer.prototype = {
         // analyser.smoothingTimeConstant = .3
         // connect the source to the analyser
         audioSourceNode.connect(analyser);
-        // connect the analyser to the destination(the speaker), or we won't hear the sound
-        // analyser.connect(audioContext.destination);
-
-        console.log(audioSourceNode)
 
         //stop the previous sound if any
         if (this.animationId !== null) {
@@ -99,7 +94,7 @@ Visualizer.prototype = {
             gap = 2, // gap between meters
             capHeight = 2,
             capStyle = '#fff',
-            meterNum = 800 / (10 + 2), //count of the meters
+            meterNum = 800 / (meterWidth + gap), //count of the meters
             capYPositionArray = []; ////store the vertical position of hte caps for the preivous frame
 
         const ctx = that.canvas.getContext('2d'),
@@ -129,12 +124,18 @@ Visualizer.prototype = {
                 }
             }
 
-            // console.log('[on getByteFrequencyData]', array)
             // sample limited data from the total array
             const step = Math.round(array.length / meterNum);
             ctx.clearRect(0, 0, cwidth, cheight);
             for (let i = 0; i < meterNum; i++) {
-                let value = array[i * step];
+                // let value = array[i * step];
+                // let value = array[i * step + Math.round(Math.random() * step)]
+                let count = 0;
+                for (let k = 0; k < step; k++) {
+                    count += array[k + i * step]
+                }
+                let value = Math.round(count / step)
+
                 if (capYPositionArray.length < Math.round(meterNum)) {
                     capYPositionArray.push(value);
                 }
@@ -153,6 +154,7 @@ Visualizer.prototype = {
             that.animationId = requestAnimationFrame(drawMeter);
         }
         this.animationId = requestAnimationFrame(drawMeter);
+        // setInterval(drawMeter, 30);
     },
 
     _audioEnd: function (instance) {
