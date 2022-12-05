@@ -157,9 +157,7 @@ const vars = {
     Visualizer: null
 }
 
-function onstart() {
-    const url = "wss://" + window.location.host + '/api/ws';
-    log(url);
+function onstart(url) {
     vars.transport = new Transport(url);
 
     captureDisplayMedia(DeviceKind.AUDIOOUTPUT, (stream) => {
@@ -202,6 +200,7 @@ function onstart() {
             blob.arrayBuffer().then((v) => {
                 vars.transport.send(new Uint8Array(v));
             });
+            // putPacket(blob)
         }, 1500);
     });
 }
@@ -283,6 +282,20 @@ function onstop() {
     container.appendChild(vars.video);
     container.appendChild(div)
 
-    onstart()
+    const url = "wss://" + window.location.host + '/api/ws?master='+new Date().valueOf();
+    log(url);
+
+    const sync = document.createElement('video')
+    sync.controls = true;
+    sync.autoplay = true;
+    sync.muted = false;
+    sync.width = 600;
+    sync.height = 320;
+
+    container.appendChild(sync)
+
+    onstart(url)
+
+    startup(sync, url)
 })();
 

@@ -28,6 +28,7 @@ function putPacket(arr) {
     const data = arr;
     if (!stream_started) {
         data.arrayBuffer().then((v) => {
+            console.info('v', v.byteLength)
             source_buffer.appendBuffer(v);
         });
         stream_started = true;
@@ -59,26 +60,30 @@ function loadPacket() { // called when source_buffer is ready for more
 }
 
 
-function opened() { // MediaSource object is ready to go
-    // https://developer.mozilla.org/en-US/docs/Web/API/MediaSource/duration
-    ms.duration = 100.0;
-    source_buffer = ms.addSourceBuffer(codecPars);
+function opened(url) {
+    return function () {
+        // MediaSource object is ready to go
+        // https://developer.mozilla.org/en-US/docs/Web/API/MediaSource/duration
+        ms.duration = 100.0;
+        source_buffer = ms.addSourceBuffer(codecPars);
 
-    // https://developer.mozilla.org/en-US/docs/Web/API/source_buffer/mode
-    const myMode = source_buffer.mode;
-    console.log('old mod', myMode);
-    // source_buffer.mode = 'sequence';
-    source_buffer.mode = 'segments';
+        // https://developer.mozilla.org/en-US/docs/Web/API/source_buffer/mode
+        const myMode = source_buffer.mode;
+        console.log('old mod', myMode);
+        // source_buffer.mode = 'sequence';
+        source_buffer.mode = 'segments';
 
-    source_buffer.addEventListener("updateend", loadPacket);
-    // ws = new WebSocket("ws://localhost:8089/ws/");
-    // ws.onmessage = function (event) {
-    //     putPacket(event.data);
-    // };
+        source_buffer.addEventListener("updateend", loadPacket);
+        ws = new WebSocket(url);
+        ws.onmessage = function (event) {
+            putPacket(event.data);
+        };
+    }
+
 }
 
-function startup(video) {
-    ms.addEventListener('sourceopen', opened, false);
+function startup(video, url) {
+    ms.addEventListener('sourceopen', opened(url), false);
     stream_live = video;
     stream_live.src = window.URL.createObjectURL(ms);
 }
