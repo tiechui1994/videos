@@ -8,7 +8,6 @@ import (
 )
 
 var (
-	ErrLimit   = fmt.Errorf("client more than limit")
 	ErrTimeout = fmt.Errorf("ping timeout")
 )
 

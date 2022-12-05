@@ -14,7 +14,6 @@ async function getDevices(kind) {
         mediaDevices.forEach((v) => {
             const label = v.label.toLocaleLowerCase();
             if (v.kind === kind && !(label.includes('virtual') || label.includes('虚拟'))) {
-                log(v);
                 device.push(v);
             }
         });
@@ -59,7 +58,7 @@ function captureDisplayMedia(kind, success_callback) {
                 frameRate: 30
             }
         };
-        console.log('video', videoConstraints)
+        log('video', videoConstraints)
         navigator.mediaDevices.getDisplayMedia(videoConstraints).then((videoStream) => {
             const [videoTrack] = videoStream.getVideoTracks()
             const audioConstraints = {
@@ -72,7 +71,7 @@ function captureDisplayMedia(kind, success_callback) {
                     chromeMediaSource: 'screen'
                 },
             };
-            console.log('audio', audioConstraints)
+            log('audio', audioConstraints)
             navigator.mediaDevices.getUserMedia(audioConstraints).then((audioStream) => {
                 const [audioTrack] = audioStream.getAudioTracks()
                 console.log(videoTrack, audioTrack)
@@ -97,54 +96,61 @@ function captureDisplayMedia(kind, success_callback) {
 }
 
 function Transport(url, onmessage) {
-    const self = this;
-    let socket = null
-    let closed = false;
-    let connected = false;
+    this.url = url;
+    this.onmessage = onmessage;
+    this.socket = null
+    this.closed = false;
+    this.connected = false;
+    this.verbose = true;
+}
 
-    self.connect = () => {
-        console.log('connect:', url)
-        socket = new WebSocket(url)
-        socket.onopen = function () {
-            connected = true;
-            console.log("[onopen], connected websocket");
+Transport.prototype = {
+    connect: function () {
+        this.log('connect:', this.url)
+
+        this.socket = new WebSocket(this.url)
+        this.socket.binaryType = 'arraybuffer'
+        this.socket.onopen = () => {
+            this.connected = true;
+            this.log("[onopen], connected websocket");
         };
-
-        socket.onmessage = onmessage
-        socket.onclose = (ev) => {
-            console.log('[onclose]', ev)
-            if (closed) {
+        this.socket.onmessage = (msgEvent) => {
+            console.info(msgEvent)
+            this.onmessage(msgEvent.data)
+        }
+        this.socket.onclose = (ev) => {
+            this.log('[onclose]', ev)
+            if (this.closed) {
                 return
             }
 
-            connected = false
-            self.connect()
+            this.connected = false
+            this.connect()
         }
+    },
 
-        socket.onerror = (ev) => {
-            console.log('[onerror]', ev)
+    send: function (data) {
+        if (!this.connected) {
+            return
         }
-    }
+        this.socket.send(data)
+    },
 
-    self.send = (data) => {
-        if (!connected) {
+    close: function () {
+        this.log('close ....')
+        if (this.closed || !this.connected) {
+            this.closed = true
             return
         }
 
-        socket.send(data)
-    }
+        this.closed = true
+        this.socket.close()
+    },
 
-    self.connect()
-
-    self.close = () => {
-        console.log('close ....')
-        if (closed || !connected) {
-            closed = true
-            return
+    log: function (...args) {
+        if (this.verbose) {
+            console.info(...args)
         }
-
-        closed = true
-        socket.close()
     }
 }
 
@@ -157,10 +163,11 @@ const vars = {
     Visualizer: null
 }
 
-function onstart() {
-    const url = "wss://" + window.location.host + '/api/ws';
-    log(url);
+function onMaster(url) {
+    log('[onMaster]', url);
+    // transport
     vars.transport = new Transport(url);
+    vars.transport.connect()
 
     captureDisplayMedia(DeviceKind.AUDIOOUTPUT, (stream) => {
         vars.video.srcObject = stream;
@@ -204,44 +211,14 @@ function onstart() {
             });
         }, 1500);
     });
-}
 
-function onpause() {
-    if (vars.recorder) {
-        vars.recorder.pause()
-    }
-}
-
-function onresume() {
-    if (vars.recorder) {
-        vars.recorder.resume()
-    }
-}
-
-function onstop() {
-    if (vars.recorder) {
-        vars.recorder.stop(function (blob) {
-            vars.video.srcObject = null;
-            vars.video.src = URL.createObjectURL(blob);
-            vars.video.controls = true;
-            vars.video.autoplay = true;
-            vars.video.muted = false;
-        });
-
-        vars.closed = true
-        if (vars.stream) {
-            vars.stream.stop()
-        }
-    }
-}
-
-(() => {
+    // audio
     vars.Visualizer = new Visualizer()
     vars.Visualizer.init()
 
+    // video
     vars.video.width = 1080;
     vars.video.height = 480;
-
     const div = document.createElement('div');
 
     const controlBtn = document.createElement('button');
@@ -282,7 +259,75 @@ function onstop() {
     container.innerHTML = '';
     container.appendChild(vars.video);
     container.appendChild(div)
+}
 
-    onstart()
+function onSlave(url) {
+    log('[onSlave]', url);
+    // transport
+    const wsMediaSource = new WebsocketMediaSource();
+    vars.video.src = wsMediaSource.init()
+    console.info(vars.video.src)
+    vars.transport = new Transport(url, wsMediaSource.putPacket.bind(wsMediaSource));
+    vars.transport.connect()
+
+    // video
+    vars.video.width = 1080;
+    vars.video.height = 480;
+    vars.video.controls = true;
+    vars.video.autoplay = true;
+
+    const container = document.querySelector('#videos');
+    container.innerHTML = '';
+    container.appendChild(vars.video);
+}
+
+
+function onpause() {
+    if (vars.recorder) {
+        vars.recorder.pause()
+    }
+}
+
+function onresume() {
+    if (vars.recorder) {
+        vars.recorder.resume()
+    }
+}
+
+function onstop() {
+    if (vars.recorder) {
+        vars.recorder.stop(function (blob) {
+            vars.video.srcObject = null;
+            vars.video.src = URL.createObjectURL(blob);
+            vars.video.controls = true;
+            vars.video.autoplay = true;
+            vars.video.muted = false;
+        });
+
+        vars.closed = true
+        if (vars.stream) {
+            vars.stream.stop()
+        }
+    }
+}
+
+(() => {
+    let master;
+    if (window.location.search && window.location.search.length > 7) {
+        const tokens = window.location.search.substring(1).split('&')
+        tokens.forEach((item) => {
+            if (item.startsWith('master=')) {
+                master = item
+            }
+        })
+    }
+
+    const url = "wss://" + window.location.host + '/api/ws';
+    if (master) {
+        onSlave(url + '?' + master)
+    } else {
+        master = 'master=' + new Date().valueOf()
+        onMaster(url + "?" + master)
+    }
 })();
 
