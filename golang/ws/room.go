@@ -43,6 +43,7 @@ func newNode(conn *websocket.Conn, pingPeriod time.Duration, maxPing uint, msgTy
 }
 
 func (s *Session) BroadCast(message Message) {
+	s.fd.Write(message.Data)
 	s.slave.Range(func(key, value interface{}) bool {
 		log.Infof("forward len: %v", len(message.Data))
 		c := value.(*Conn)

@@ -4,6 +4,8 @@ const DeviceKind = {
     VIDEOINPUT: 'videoinput'
 };
 
+const codecs = 'video/webm; codecs="vp9"';
+
 function log(...args) {
     console.log(...args)
 }
@@ -14,6 +16,7 @@ async function getDevices(kind) {
         mediaDevices.forEach((v) => {
             const label = v.label.toLocaleLowerCase();
             if (v.kind === kind && !(label.includes('virtual') || label.includes('虚拟'))) {
+                log(v);
                 device.push(v);
             }
         });
@@ -58,7 +61,7 @@ function captureDisplayMedia(kind, success_callback) {
                 frameRate: 30
             }
         };
-        log('video', videoConstraints)
+        console.log('video', videoConstraints)
         navigator.mediaDevices.getDisplayMedia(videoConstraints).then((videoStream) => {
             const [videoTrack] = videoStream.getVideoTracks()
             const audioConstraints = {
@@ -71,7 +74,7 @@ function captureDisplayMedia(kind, success_callback) {
                     chromeMediaSource: 'screen'
                 },
             };
-            log('audio', audioConstraints)
+            console.log('audio', audioConstraints)
             navigator.mediaDevices.getUserMedia(audioConstraints).then((audioStream) => {
                 const [audioTrack] = audioStream.getAudioTracks()
                 console.log(videoTrack, audioTrack)
@@ -95,37 +98,39 @@ function captureDisplayMedia(kind, success_callback) {
     })
 }
 
-function Transport(url, onmessage) {
-    this.url = url;
-    this.onmessage = onmessage;
+
+function Transport(url) {
     this.socket = null
     this.closed = false;
     this.connected = false;
-    this.verbose = true;
+    this.url = url;
 }
 
 Transport.prototype = {
-    connect: function () {
-        this.log('connect:', this.url)
-
+    connect: function (onmessage) {
+        console.log('connect:', this.url)
         this.socket = new WebSocket(this.url)
-        this.socket.binaryType = 'arraybuffer'
         this.socket.onopen = () => {
             this.connected = true;
-            this.log("[onopen], connected websocket");
+            console.log("[onopen], connected websocket");
         };
-        this.socket.onmessage = (msgEvent) => {
-            console.info(msgEvent)
-            this.onmessage(msgEvent.data)
+
+        if (onmessage) {
+            this.socket.onmessage = onmessage
         }
+
         this.socket.onclose = (ev) => {
-            this.log('[onclose]', ev)
+            console.log('[onclose]', ev)
             if (this.closed) {
                 return
             }
 
             this.connected = false
-            this.connect()
+            this.connect(onmessage)
+        }
+
+        this.socket.onerror = (ev) => {
+            console.log('[onerror]', ev)
         }
     },
 
@@ -133,11 +138,12 @@ Transport.prototype = {
         if (!this.connected) {
             return
         }
+
         this.socket.send(data)
     },
 
     close: function () {
-        this.log('close ....')
+        console.log('close ....')
         if (this.closed || !this.connected) {
             this.closed = true
             return
@@ -145,100 +151,133 @@ Transport.prototype = {
 
         this.closed = true
         this.socket.close()
+    }
+};
+
+function Master(url) {
+    this.url = url;
+    this.recorder = null;
+    this.transport = null;
+    this.closed = false;
+    this.video = document.createElement('video');
+    this.stream = null;
+    this.Visualizer = null;
+}
+
+Master.prototype = {
+    onstart: function () {
+        this.transport = new Transport(this.url);
+        this.transport.connect()
+
+        this.Visualizer = new Visualizer()
+        this.Visualizer.init()
+
+        this.video.width = 640;
+        this.video.height = 480;
+
+        captureDisplayMedia(DeviceKind.AUDIOOUTPUT, (stream) => {
+            this.video.srcObject = stream;
+            this.video.controls = true;
+            this.video.autoplay = true;
+            this.video.muted = true;
+
+            this.stream = stream;
+
+            this.Visualizer.start(stream)
+
+            const queue = [];
+            const config = {
+                mimeType: codecs, // vp8, vp9, h264, mkv, opus/vorbis
+                audioBitsPerSecond: 256 * 8 * 1024,
+                videoBitsPerSecond: 256 * 8 * 1024,
+                checkForInactiveTracks: true,
+                timeSlice: 500, // concatenate intervals based blobs
+                ondataavailable: function (data, type) {
+                    queue.push(data);
+                }
+            };
+
+            this.recorder = new MediaStreamRecorder(stream, config);
+            this.recorder.record();
+
+            log('start ..........');
+            const task = setInterval(() => {
+                if (queue.length === 0) {
+                    if (this.closed) {
+                        log('closed .......')
+                        clearInterval(task)
+                    }
+                    return
+                }
+
+                const length = queue.length > 30 ? 30 : queue.length;
+                const blob = new Blob(queue.splice(0, length), {type: codecs});
+                blob.arrayBuffer().then((v) => {
+                    console.info('send v', v.byteLength)
+                    this.transport.send.call(this.transport, new Uint8Array(v))
+                });
+            }, 1000);
+        });
     },
 
-    log: function (...args) {
-        if (this.verbose) {
-            console.info(...args)
+    onpause: function () {
+        if (this.recorder) {
+            this.recorder.pause()
+        }
+    },
+    onresume: function () {
+        if (this.recorder) {
+            this.recorder.resume()
+        }
+    },
+    onstop: function () {
+        if (this.recorder) {
+            this.recorder.stop((blob) => {
+                this.video.srcObject = null;
+                this.video.src = URL.createObjectURL(blob);
+                this.video.controls = true;
+                this.video.autoplay = true;
+                this.video.muted = false;
+            });
+
+            this.closed = true
+            if (this.stream) {
+                this.stream.stop()
+            }
+
+            this.transport.close()
         }
     }
+};
+
+function sleep(time) {
+    return new Promise((resolve) => setTimeout(resolve, time));
 }
 
-const vars = {
-    transport: null,
-    recorder: null,
-    video: document.createElement('video'),
-    closed: false,
-    stream: null,
-    Visualizer: null
-}
 
 function onMaster(url) {
-    log('[onMaster]', url);
-    // transport
-    vars.transport = new Transport(url);
-    vars.transport.connect()
+    const master = new Master(url);
+    master.onstart()
 
-    captureDisplayMedia(DeviceKind.AUDIOOUTPUT, (stream) => {
-        vars.video.srcObject = stream;
-        vars.video.controls = true;
-        vars.video.autoplay = true;
-        vars.video.muted = true;
-
-        vars.stream = stream;
-
-        vars.Visualizer.start(stream)
-
-        const queue = [];
-        const config = {
-            mimeType: 'video/webm; codecs=vp9', // vp8, vp9, h264, mkv, opus/vorbis
-            audioBitsPerSecond: 256 * 8 * 1024,
-            videoBitsPerSecond: 256 * 8 * 1024,
-            checkForInactiveTracks: true,
-            timeSlice: 500, // concatenate intervals based blobs
-            ondataavailable: function (data, type) {
-                queue.push(data);
-            }
-        };
-
-        vars.recorder = new MediaStreamRecorder(stream, config);
-        vars.recorder.record();
-
-        log('start ..........');
-        const task = setInterval(() => {
-            if (queue.length === 0) {
-                if (vars.closed) {
-                    log('closed .......')
-                    clearInterval(task)
-                }
-                return
-            }
-
-            const length = queue.length > 30 ? 30 : queue.length;
-            const blob = new Blob(queue.splice(0, length), {type: "video/webm; codecs=vp9"});
-            blob.arrayBuffer().then((v) => {
-                vars.transport.send(new Uint8Array(v));
-            });
-        }, 1500);
-    });
-
-    // audio
-    vars.Visualizer = new Visualizer()
-    vars.Visualizer.init()
-
-    // video
-    vars.video.width = 1080;
-    vars.video.height = 480;
     const div = document.createElement('div');
 
     const controlBtn = document.createElement('button');
     controlBtn.innerHTML = '暂停录制';
     controlBtn.className = 'btn btn-success btn-lg button';
     controlBtn.setAttribute('data', 'resume')
-
     controlBtn.onclick = () => {
         switch (controlBtn.getAttribute('data')) {
             case 'resume':
                 log('onpause ......')
                 controlBtn.innerHTML = '恢复录制';
                 controlBtn.setAttribute('data', 'pause')
-                onpause()
+                master.onpause()
                 break
             case 'pause':
                 log('onresume ......')
                 controlBtn.innerHTML = '暂停录制';
                 controlBtn.setAttribute('data', 'resume')
-                onresume()
+                master.onresume()
                 break
 
         }
@@ -248,86 +287,140 @@ function onMaster(url) {
     closeBtn.innerHTML = '结束';
     closeBtn.className = 'btn btn-success btn-lg button';
     closeBtn.onclick = () => {
-        vars.transport.close()
-        onstop()
+        master.onstop()
     }
 
     div.appendChild(controlBtn)
     div.appendChild(closeBtn)
 
     const container = document.querySelector('#videos');
-    container.innerHTML = '';
-    container.appendChild(vars.video);
+    container.appendChild(master.video);
     container.appendChild(div)
 }
 
 function onSlave(url) {
-    log('[onSlave]', url);
-    // transport
-    const wsMediaSource = new WebsocketMediaSource();
-    vars.video.src = wsMediaSource.init()
-    console.info(vars.video.src)
-    vars.transport = new Transport(url, wsMediaSource.putPacket.bind(wsMediaSource));
-    vars.transport.connect()
-
-    // video
-    vars.video.width = 1080;
-    vars.video.height = 480;
-    vars.video.controls = true;
-    vars.video.autoplay = true;
-
     const container = document.querySelector('#videos');
-    container.innerHTML = '';
-    container.appendChild(vars.video);
+
+    const video = document.createElement('video')
+    video.controls = true;
+    video.autoplay = true;
+    video.width = 640;
+    video.height = 320;
+
+    container.appendChild(video)
+
+    const mediaSource = new WebsocketMediaSource(codecs);
+    mediaSource.init(video)
+    const transport = new Transport(url)
+    transport.connect((event) => {
+        console.info('recv v', event.data.size)
+        mediaSource.putPacket(event.data)
+    })
 }
 
 
-function onpause() {
-    if (vars.recorder) {
-        vars.recorder.pause()
-    }
-}
+async function onVideo() {
+    const mediaSource = new MediaSource();
 
-function onresume() {
-    if (vars.recorder) {
-        vars.recorder.resume()
-    }
-}
+    const video = document.createElement("video");
+    video.width = 320;
+    video.height = 240;
+    video.autoplay = true;
+    video.controls = true;
 
-function onstop() {
-    if (vars.recorder) {
-        vars.recorder.stop(function (blob) {
-            vars.video.srcObject = null;
-            vars.video.src = URL.createObjectURL(blob);
-            vars.video.controls = true;
-            vars.video.autoplay = true;
-            vars.video.muted = false;
-        });
+    document.querySelector('#videos').appendChild(video)
 
-        vars.closed = true
-        if (vars.stream) {
-            vars.stream.stop()
+    const urls = ["https://nickdesaulniers.github.io/netfix/demo/frag_bunny.mp4",
+        "https://raw.githubusercontent.com/w3c/web-platform-tests/master/media-source/mp4/test.mp4",
+        "https://raw.githubusercontent.com/w3c/web-platform-tests/master/media-source/mp4/test.mp4",
+        "https://nickdesaulniers.github.io/netfix/demo/frag_bunny.mp4"];
+
+    const request = url => fetch(url).then(response => response.arrayBuffer());
+
+    // `urls.reverse()` stops at `.currentTime` : `9`
+    const files = await Promise.all(urls.map(request));
+
+    /*
+     `.webm` files 'SourceBuffer': This SourceBuffer has been removed from the parent media
+     Uncaught DOMException: Failed to execute 'appendBuffer' on source.
+     Uncaught DOMException: Failed to set the 'timestampOffset' property on 'SourceBuffer': This SourceBuffer has been removed from the parent media source.
+    */
+    // const mimeCodec = "video/webm; codecs=opus";
+    // https://stackoverflow.com/questions/14108536/how-do-i-append-two-video-files-data-to-a-source-buffer-using-media-source-api/
+    const mimeCodec = 'video/mp4; codecs="avc1.42E01E,mp4a.40.2"';
+
+    const media = await Promise.all(files.map(file => {
+        return new Promise(resolve => {
+            let media = document.createElement("video");
+            let blobURL = URL.createObjectURL(new Blob([file]));
+            media.onloadedmetadata = async e => {
+                resolve({
+                    mediaDuration: media.duration,
+                    mediaBuffer: file
+                })
+            }
+            media.src = blobURL;
+        })
+    }));
+
+    console.log(media);
+
+    mediaSource.addEventListener("sourceopen", sourceOpen);
+
+    video.src = URL.createObjectURL(mediaSource);
+
+    async function sourceOpen(event) {
+        if (MediaSource.isTypeSupported(mimeCodec)) {
+            const sourceBuffer = mediaSource.addSourceBuffer(mimeCodec);
+
+            for (let chunk of media) {
+                await new Promise(resolve => {
+                    sourceBuffer.appendBuffer(chunk.mediaBuffer);
+                    sourceBuffer.onupdateend = e => {
+                        sourceBuffer.onupdateend = null;
+                        sourceBuffer.timestampOffset += chunk.mediaDuration;
+                        console.log(mediaSource.duration);
+                        resolve()
+                    }
+                })
+
+            }
+
+            mediaSource.endOfStream();
+
+        } else {
+            console.warn(mimeCodec + " not supported");
         }
     }
 }
 
 (() => {
+    const url = "wss://" + window.location.host + '/api/ws';
     let master;
+
+
     if (window.location.search && window.location.search.length > 7) {
         const tokens = window.location.search.substring(1).split('&')
         tokens.forEach((item) => {
-            if (item.startsWith('master=')) {
+            if (item.includes('master=')) {
                 master = item
             }
         })
     }
 
-    const url = "wss://" + window.location.host + '/api/ws';
-    if (master) {
-        onSlave(url + '?' + master)
+    if (!master) {
+        master = new Date().valueOf()
+        onMaster(url + `?master=${master}&slave=${master}`)
     } else {
-        master = 'master=' + new Date().valueOf()
-        onMaster(url + "?" + master)
+        const slave = new Date().valueOf()
+        onSlave(url + `?${master}&slave=${slave}`)
     }
+
+    // master = new Date().valueOf()
+    // onMaster(url + `?master=${master}&slave=${master}`)
+    // sleep(2500).then(() => {
+    //     const slave = new Date().valueOf()
+    //     onSlave(url + `?master=${master}&slave=${slave}`)
+    // })
 })();
 

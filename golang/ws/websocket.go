@@ -47,7 +47,6 @@ func (w *WebSocketServer) Upgrade(writer http.ResponseWriter, request *http.Requ
 	var err error
 	defer func() {
 		if err != nil {
-			writer.WriteHeader(http.StatusInternalServerError)
 			io.WriteString(writer, err.Error())
 		}
 	}()
@@ -63,15 +62,26 @@ func (w *WebSocketServer) Upgrade(writer http.ResponseWriter, request *http.Requ
 		err = fmt.Errorf("invalid master")
 		return
 	}
+	slave := request.URL.Query().Get("slave")
+	if slave == "" {
+		err = fmt.Errorf("invalid slave")
+		return
+	}
 
-	if val, ok := w.nodes.Load(master); ok {
-		log.Infof("add new slave")
-		val.(Node).AddSlave(raw)
-	} else {
-		log.Infof("add new master")
+	if master == slave {
+		log.Infof("add new master: %v", master)
 		node := newNode(raw, w.PingPeriod, uint(w.PingTimeout), w.MessageType)
 		w.nodes.Store(master, node)
+		return
 	}
+
+	if val, ok := w.nodes.Load(master); ok {
+		log.Infof("add new slave: %v", slave)
+		val.(Node).AddSlave(raw)
+		return
+	}
+
+	err = fmt.Errorf("invalid params")
 }
 
 func (w *WebSocketServer) ServerFile(writer http.ResponseWriter, request *http.Request) {
