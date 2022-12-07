@@ -66,8 +66,7 @@ function captureDisplayMedia(kind, success_callback) {
             const [videoTrack] = videoStream.getVideoTracks()
             const audioConstraints = {
                 audio: {
-                    // groupId: device[0].groupId,
-                    deviceId: device[1].deviceId,
+                    groupId: device[0].groupId,
                     autoGainControl: true, // 自动增益
                     echoCancellation: true, // 回声消除
                     noiseSuppression: true, // 噪音抑制
@@ -212,10 +211,8 @@ Master.prototype = {
 
                 const length = queue.length > 30 ? 30 : queue.length;
                 const blob = new Blob(queue.splice(0, length), {type: codecs});
-                blob.arrayBuffer().then((v) => {
-                    console.info('send v', v.byteLength)
-                    this.transport.send.call(this.transport, new Uint8Array(v))
-                });
+                console.info('send v', blob.size)
+                this.transport.send.call(this.transport, blob)
             }, 1000);
         });
     },
