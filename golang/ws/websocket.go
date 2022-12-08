@@ -84,36 +84,75 @@ func (w *WebSocketServer) Upgrade(writer http.ResponseWriter, request *http.Requ
 	err = fmt.Errorf("invalid params")
 }
 
+const (
+	chunk = 64*1024 - 1
+)
+
 func (w *WebSocketServer) ServerFile(writer http.ResponseWriter, request *http.Request) {
+	var err error
+	defer func() {
+		if err != nil {
+			io.WriteString(writer, err.Error())
+		}
+	}()
+
 	if request.Method != http.MethodGet {
 		return
 	}
 
-	ranges := request.Header.Get("range")
-	if len(ranges) > 0 {
-		parts := strings.Split(strings.ReplaceAll(ranges, "bytes=", ""), "-")
-		start, _ := strconv.ParseInt(parts[0], 1, 64)
-		end, _ := strconv.ParseInt(parts[1], 1, 64)
-		if end == 0 {
-			end = 512
-		}
-
-		writer.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/1000000000000000000000", start, end))
-		writer.Header().Set("Accept-Ranges", "bytes")
-		writer.Header().Set("Content-Type", "video/webm")
-		writer.Header().Set("Content-Length", fmt.Sprintf("%v", end-start+1))
-		writer.WriteHeader(206)
-
-		data := make([]byte, end-start+1)
-		n, err := w.fd.ReadAt(data, start)
-		log.Infof("err: %v, %v", err, n)
-		writer.Write(data)
-	} else {
-		writer.Header().Set("Accept-Ranges", "bytes")
-		writer.Header().Set("Content-Type", "video/webm")
-		writer.WriteHeader(200)
-		io.CopyBuffer(writer, w.fd, make([]byte, 4096))
+	master := request.URL.Query().Get("master")
+	if master == "" {
+		err = fmt.Errorf("invalid master")
+		return
 	}
+	val, ok := w.nodes.Load(master)
+	if !ok {
+		err = fmt.Errorf("invalid master")
+		return
+	}
+	session := val.(*Session)
+	filename := fmt.Sprintf("/tmp/master_%v.webm", strings.ReplaceAll(session.master.RemoteAddr(), ":", "_"))
+
+	fd, _ := os.OpenFile(filename, os.O_RDONLY, 0666)
+	defer func() {
+		fd.Close()
+	}()
+
+	header := writer.Header()
+	header.Set("Access-Control-Allow-Credentials", "true")
+	header.Set("Access-Control-Allow-Headers", "Content-Type, Accept, Range")
+	header.Set("Access-Control-Allow-Method", "GET, POST, OPTIONS")
+	header.Set("Access-Control-Allow-Origin", "*")
+	header.Set("Connection", "keep-alive")
+	header.Set("Cache-Control","no-cache")
+
+	ranges := request.Header.Get("range")
+	parts := strings.Split(strings.ReplaceAll(ranges, "bytes=", ""), "-")
+	var start, end int64
+	if len(parts) == 2 {
+		start, _ = strconv.ParseInt(parts[0], 10, 64)
+		end, _ = strconv.ParseInt(parts[1], 10, 64)
+	}
+	if end == 0 {
+		end = start + chunk
+	}
+
+	data := make([]byte, end-start+1)
+	n, err := fd.ReadAt(data, start)
+	log.Infof("err: %v, %v", err, n)
+	if n != len(data) {
+		end = start + int64(n) - 1
+	}
+
+	stat, _ := fd.Stat()
+	log.Infof("file %v, size %v", filename, stat.Size())
+	writer.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v", start, end, stat.Size()))
+	writer.Header().Set("Accept-Ranges", "bytes")
+	writer.Header().Set("Content-Type", "video/mp4")
+	writer.Header().Set("Content-Length", fmt.Sprintf("%v", end-start+1))
+	writer.WriteHeader(206)
+
+	writer.Write(data[:n])
 }
 
 func (w *WebSocketServer) Initializer(c *WebSocketConfig) error {

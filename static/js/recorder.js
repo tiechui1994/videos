@@ -4,7 +4,7 @@ const DeviceKind = {
     VIDEOINPUT: 'videoinput'
 };
 
-const codecs = 'video/webm; codecs="vp9"';
+const codecs = 'video/mp4; codecs="avc1"';
 
 function log(...args) {
     console.log(...args)
@@ -311,7 +311,7 @@ function onSlave(url) {
     const transport = new Transport(url)
     transport.connect((event) => {
         console.info('recv v', event.data.size)
-        mediaSource.putPacket(event.data)
+        mediaSource.putPacket.call(mediaSource, event.data)
     })
 }
 
@@ -391,7 +391,32 @@ async function onVideo() {
     }
 }
 
+function test() {
+    const types = [
+        'video/webm',
+        'audio/webm',
+        'video/mpeg',
+        'video/mp4',
+        'video/webm;codecs="vp8"',
+        'video/webm;codecs="vp9"',
+        'video/webm;codecs="daala"',
+        'video/webm;codecs="h264"',
+        'video/webm;codecs="H264"',
+        'video/webm;codecs="avc1"',
+        'video/x-matroska;codecs="avc1"',
+        'audio/webm;codecs="opus"',
+        'video/mp4; codecs="avc1.424028, mp4a.40.2"'
+    ];
+
+    for (const type of types) {
+        console.log(
+            `Is ${type} supported? ${MediaRecorder.isTypeSupported(type) ? "Yes" : "No"}`
+        );
+    }
+}
+
 (() => {
+    test()
     const url = "wss://" + window.location.host + '/api/ws';
     let master;
 

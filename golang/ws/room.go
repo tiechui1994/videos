@@ -2,12 +2,13 @@ package ws
 
 import (
 	"fmt"
-	log "github.com/pion/ion-log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/pion/ion-log"
 )
 
 type Node interface {
@@ -37,7 +38,7 @@ func newNode(conn *websocket.Conn, pingPeriod time.Duration, maxPing uint, msgTy
 		s.master.Close()
 	})
 
-	filename := fmt.Sprintf("/tmp/master_%v.webm", conn.RemoteAddr().String())
+	filename := fmt.Sprintf("/tmp/master_%v.webm", strings.ReplaceAll(conn.RemoteAddr().String(), ":", "_"))
 	s.fd, _ = os.OpenFile(filename, os.O_RDWR|os.O_TRUNC|os.O_CREATE|os.O_APPEND, 0666)
 	return s
 }

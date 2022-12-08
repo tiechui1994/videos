@@ -10,7 +10,6 @@ function WebsocketMediaSource(codes) {
     this.queue = [];
     this.videoStarted = false; // the SourceBuffer updateend callback active nor not
     this.count = 0;
-    this.element = null;
 }
 
 WebsocketMediaSource.prototype = {
@@ -32,9 +31,9 @@ WebsocketMediaSource.prototype = {
     },
 
     onSourceopen: function () {
-        this.log('[onSourceopen]', MediaSource.isTypeSupported(this.codecs))
+        this.log('[onSourceopen] support', MediaSource.isTypeSupported(this.codecs))
         // https://developer.mozilla.org/en-US/docs/Web/API/MediaSource/duration
-        // this.mediaSource.duration = 10000000.0;
+        this.mediaSource.duration = 200.0;
         // init SourceBuffer
         this.sourceBuffer = this.mediaSource.addSourceBuffer(this.codecs);
         this.sourceBuffer.onerror = () => {
@@ -45,6 +44,9 @@ WebsocketMediaSource.prototype = {
         }
         this.sourceBuffer.onupdateend = () => {
             this.loadPacket()
+        }
+        this.sourceBuffer.onupdate = () => {
+            console.warn('[onupdate]', this.mediaSource.readyState)
         }
 
         // https://developer.mozilla.org/en-US/docs/Web/API/source_buffer/mode
@@ -78,21 +80,18 @@ WebsocketMediaSource.prototype = {
 
             this.videoStarted = true;
             this.count = this.count + 1;
+            this.log("count:", this.count, this.videoStarted);
             return;
         }
 
         this.queue.push(data); // add to the end
-
         this.log("queue push, current len:", this.queue.length);
-        if (!this.sourceBuffer.updating) {
-            this.loadPacket()
-        }
     },
 
     loadPacket: function () {
-        this.error('[loadPacket]')
         // called when source_buffer is ready for more
         // really ready
+        this.log(this.sourceBuffer, this.queue.length)
         if (!this.sourceBuffer.updating) {
             if (this.queue.length > 0) {
                 this.log("queue pop, current len:", this.queue.length);
