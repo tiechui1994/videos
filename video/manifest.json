@@ -16,8 +16,12 @@
   ],
   "content_scripts": [
     {
-      "matches": ["https://*.google.com/*", "https://*.youtube.com/*"],
-      "js": ["content-script.js"]
+      "matches": [
+        "https://*/*"
+      ],
+      "js": [
+        "content-script.js"
+      ]
     }
   ]
 }
