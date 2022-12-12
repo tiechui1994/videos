@@ -12,7 +12,9 @@
   "permissions": [
     "storage",
     "debugger",
-    "activeTab"
+    "activeTab",
+    "webRequest",
+    "tabs"
   ],
   "content_scripts": [
     {
@@ -23,5 +25,9 @@
         "content-script.js"
       ]
     }
-  ]
+  ],
+  "action": {
+    "default_icon": "icon/16.png",
+    "default_popup": "popup/index.html"
+  }
 }
